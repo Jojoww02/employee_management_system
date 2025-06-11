@@ -59,3 +59,19 @@ Follow these steps to get the project running on your local machine:
     python manage.py createsuperuser
     ```
     Follow the prompts to create an admin user.
+
+## Running the Application
+
+1.  **Start the Django development server:**
+
+    Make sure your virtual environment is activated.
+
+    ```bash
+    python manage.py runserver
+    ```
+
+2.  **Access the application:**
+
+    Open your web browser and go to `http://127.0.0.1:8000/`.
+
+    You can access the Django Admin panel at `http://127.0.0.1:8000/admin/` using the superuser credentials you created.
