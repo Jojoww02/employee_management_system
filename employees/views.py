@@ -1,6 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Employee
 from .forms import EmployeeForm
+from django.shortcuts import get_object_or_404, redirect
+from django.views.decorators.http import require_POST
 
 def employee_list(request):
     employees = Employee.objects.all()
@@ -27,9 +29,15 @@ def employee_update(request, pk):
         form = EmployeeForm(instance=employee)
     return render(request, 'employees/employee_form.html', {'form': form})
 
+@require_POST
 def employee_delete(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
+    employee.delete()
+    return redirect('employee_list')
+
+def employee_bulk_delete(request):
     if request.method == 'POST':
-        employee.delete()
-        return redirect('employee_list')
-    return render(request, 'employees/employee_confirm_delete.html', {'employee': employee})
+        selected_employee_ids = request.POST.getlist('selected_employee_ids')
+        if selected_employee_ids:
+            Employee.objects.filter(pk__in=selected_employee_ids).delete()
+    return redirect('employee_list')
