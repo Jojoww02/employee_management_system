@@ -1,12 +1,38 @@
 {% extends 'base.html' %}
+{% load widget_tweaks %}
 
 {% block content %}
-<h1>{% if form.instance.pk %}Edit Karyawan{% else %}Tambah Karyawan{% endif %}</h1>
-
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit" class="btn btn-success">Simpan</button>
-    <a href="{% url 'employee_list' %}" class="btn btn-secondary">Batal</a>
-</form>
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h2 class="card-title mb-0">{% if form.instance.pk %}Edit Karyawan{% else %}Tambah Karyawan{% endif %}</h2>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="mb-3">
+                    {{ field.label_tag }}
+                    {% if field.name == 'alamat' %}
+                        {% render_field field class="form-control" rows="4" %}
+                    {% elif field.name == 'total_gaji' %}
+                        <div class="input-group">
+                            <span class="input-group-text">Rp</span>
+                            {% render_field field class="form-control" %}
+                        </div>
+                    {% else %}
+                        {% render_field field class="form-control" %}
+                    {% endif %}
+                    {% if field.help_text %}
+                        <div class="form-text">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <div class="invalid-feedback d-block">{{ error }}</div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-success me-2">Simpan</button>
+            <a href="{% url 'employee_list' %}" class="btn btn-secondary">Batal</a>
+        </form>
+    </div>
+</div>
 {% endblock %}
