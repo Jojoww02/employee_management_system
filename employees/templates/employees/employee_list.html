@@ -2,30 +2,247 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<h1>Daftar Karyawan</h1>
-<a href="{% url 'employee_create' %}" class="btn btn-primary">Tambah Karyawan</a>
+<style>
+    th.sortable {
+        cursor: pointer;
+    }
+</style>
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="card-title mb-0">Daftar Karyawan</h2>
+                <p class="card-text text-muted mb-0">Manajemen data karyawan perusahaan.</p>
+            </div>
+            <div>
+                {# Action buttons #}
+                <button type="button" class="btn btn-outline-danger me-2" id="deleteSelectedButton" disabled>
+                    <i class="bi bi-trash me-1"></i> Delete
+                </button>
+                <a href="{% url 'employee_create' %}" class="btn btn-primary">
+                    <i class="bi bi-plus-lg me-1"></i> Tambah Karyawan
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="employeeTable">
+                <thead>
+                    <tr>
+                        <th scope="col" class="ps-3"></th>
+                        <th scope="col" class="sortable" data-sort-column="nama" data-sort-type="text">Nama <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="sortable" data-sort-column="email" data-sort-type="text">Email <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="sortable" data-sort-column="jabatan" data-sort-type="text">Jabatan <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="sortable" data-sort-column="total_gaji" data-sort-type="number">Gaji <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="sortable" data-sort-column="tanggal_lahir" data-sort-type="date">Tanggal Lahir <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="sortable" data-sort-column="tanggal_bergabung" data-sort-type="date">Tanggal Bergabung <i class="bi bi-arrow-down-up text-muted ms-1"></i></th>
+                        <th scope="col" class="pe-3">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in employees %}
+                    <tr>
+                        <td class="ps-3">
+                            <input type="checkbox" class="form-check-input employee-checkbox" name="selected_employee_ids" value="{{ employee.pk }}"> {# Changed to checkbox #}
+                        </td>
+                        <td><strong>{{ employee.nama }}</strong></td>
+                        <td>{{ employee.email }}</td>
+                        <td>{{ employee.jabatan }}</td>
+                        <td>Rp {{ employee.total_gaji|floatformat:2 }}</td>
+                        <td>{{ employee.tanggal_lahir|default:"-" }}</td>
+                        <td>{{ employee.tanggal_bergabung|default:"-" }}</td>
+                        <td class="pe-3">
+                            <a href="{% url 'employee_update' employee.pk %}" class="btn btn-sm btn-light me-1">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">Tidak ada data karyawan.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>Nama</th>
-            <th>Email</th>
-            <th>Jabatan</th>
-            <th>Aksi</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for employee in employees %}
-        <tr>
-            <td>{{ employee.nama }}</td>
-            <td>{{ employee.email }}</td>
-            <td>{{ employee.jabatan }}</td>
-            <td>
-                <a href="{% url 'employee_update' employee.pk %}" class="btn btn-warning">Edit</a>
-                <a href="{% url 'employee_delete' employee.pk %}" class="btn btn-danger">Hapus</a>
-            </td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<!-- Delete Employee Confirmation Modal -->
+<div class="modal fade" id="deleteEmployeeModal" tabindex="-1" aria-labelledby="deleteEmployeeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteEmployeeModalLabel">Konfirmasi Hapus Karyawan</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Apakah Anda yakin ingin menghapus karyawan <strong id="employeeNameToDelete"></strong>?
+            </div>
+            <div class="modal-footer">
+                <form id="singleDeleteForm" method="post">
+                    {% csrf_token %}
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-danger">Ya, Hapus</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const deleteSelectedButton = document.getElementById('deleteSelectedButton');
+        const employeeCheckboxes = document.querySelectorAll('.employee-checkbox');
+        const employeeTable = document.getElementById('employeeTable');
+        const sortableHeaders = employeeTable.querySelectorAll('th.sortable');
+
+        // --- Delete Button Logic ---
+        function updateDeleteButtonState() {
+            let checkedCount = 0;
+            let selectedEmployeeId = null;
+            let selectedEmployeeName = null;
+
+            employeeCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    checkedCount++;
+                    selectedEmployeeId = checkbox.value;
+                    // Find the employee name from the table row
+                    const row = checkbox.closest('tr');
+                    selectedEmployeeName = row.querySelector('td:nth-child(2) strong').textContent;
+                }
+            });
+
+            // Enable the button only if exactly one checkbox is checked
+            deleteSelectedButton.disabled = (checkedCount !== 1);
+
+            // Store the selected employee data for the button's click event
+            deleteSelectedButton.dataset.employeeId = selectedEmployeeId;
+            deleteSelectedButton.dataset.employeeName = selectedEmployeeName;
+        }
+
+        employeeCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    employeeCheckboxes.forEach(otherCheckbox => {
+                        if (otherCheckbox !== this) {
+                            otherCheckbox.checked = false;
+                        }
+                    });
+                }
+                updateDeleteButtonState();
+            });
+        });
+
+        updateDeleteButtonState(); // Initial state on page load
+
+        // Add click listener for the header delete button
+        deleteSelectedButton.addEventListener('click', function() {
+            const employeeId = this.dataset.employeeId;
+            const employeeName = this.dataset.employeeName;
+
+            if (employeeId && employeeName) {
+                // Manually trigger the modal and pass data
+                employeeNameToDelete.textContent = employeeName;
+                singleDeleteForm.action = `/employees/delete/${employeeId}/`; // Adjust URL if needed
+
+                const modal = new bootstrap.Modal(deleteEmployeeModal);
+                modal.show();
+            }
+        });
+
+        // --- Employee Delete Modal Logic (for trash icon and new button) ---
+        const deleteEmployeeModal = document.getElementById('deleteEmployeeModal');
+        const employeeNameToDelete = document.getElementById('employeeNameToDelete');
+        const singleDeleteForm = document.getElementById('singleDeleteForm');
+
+        deleteEmployeeModal.addEventListener('show.bs.modal', function (event) {
+            // Check if the event was triggered by the trash icon button (relatedTarget will be the button)
+            if (event.relatedTarget) {
+                const button = event.relatedTarget;
+                const employeeId = button.getAttribute('data-employee-id');
+                const employeeName = button.getAttribute('data-employee-name');
+
+                employeeNameToDelete.textContent = employeeName;
+                singleDeleteForm.action = `/employees/delete/${employeeId}/`;
+            }
+            // If triggered by deleteSelectedButton, data is already set in its click handler
+        });
+
+        // --- Sorting Logic ---
+        sortableHeaders.forEach(header => {
+            header.addEventListener('click', function() {
+                const column = this.dataset.sortColumn;
+                const type = this.dataset.sortType;
+                let direction = this.dataset.sortDirection || 'asc'; // Default to ascending
+
+                // Toggle direction
+                direction = (direction === 'asc') ? 'desc' : 'asc';
+                this.dataset.sortDirection = direction;
+
+                // Reset icons for other headers
+                sortableHeaders.forEach(h => {
+                    const icon = h.querySelector('i');
+                    if (icon) {
+                        icon.classList.remove('bi-arrow-up', 'bi-arrow-down');
+                        icon.classList.add('bi-arrow-down-up');
+                    }
+                });
+
+                // Update icon for current header
+                const currentIcon = this.querySelector('i');
+                if (currentIcon) {
+                    currentIcon.classList.remove('bi-arrow-down-up');
+                    currentIcon.classList.add(direction === 'asc' ? 'bi-arrow-up' : 'bi-arrow-down');
+                }
+
+                sortTable(employeeTable, column, type, direction);
+            });
+        });
+
+        function sortTable(table, column, type, direction) {
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            // Find the correct column index dynamically based on data-sort-column
+            const headerCells = Array.from(table.querySelectorAll('th'));
+            const columnIndex = headerCells.findIndex(th => th.dataset.sortColumn === column);
+
+            rows.sort((a, b) => {
+                // Ensure the correct cell is accessed based on the found columnIndex
+                let aValue = a.children[columnIndex].textContent.trim();
+                let bValue = b.children[columnIndex].textContent.trim();
+
+                // Special handling for salary / gaji
+                if (column === 'total_gaji') {
+                    aValue = parseFloat(aValue.replace('Rp ', '')) || 0;
+                    bValue = parseFloat(bValue.replace('Rp ', '')) || 0;
+                } else if (type === 'date') { // Apply date handling for any column with type 'date'
+                    aValue = (aValue === '-') ? '0000-00-00' : aValue;
+                    bValue = (bValue === '-') ? '0000-00-00' : bValue;
+                }
+
+                if (type === 'number') {
+                    aValue = parseFloat(aValue);
+                    bValue = parseFloat(bValue);
+                } else if (type === 'date') {
+                    aValue = new Date(aValue);
+                    bValue = new Date(bValue);
+                }
+
+                let comparison = 0;
+                if (aValue > bValue) {
+                    comparison = 1;
+                } else if (aValue < bValue) {
+                    comparison = -1;
+                }
+
+                return direction === 'asc' ? comparison : -comparison;
+            });
+
+            rows.forEach(row => tbody.appendChild(row));
+        }
+    });
+</script>
 {% endblock %}
